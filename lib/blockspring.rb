@@ -151,7 +151,7 @@ module Blockspring
     def addFileOutput(name, filepath)
       filename = File.basename(filepath)
       b64_file_contents = Base64.strict_encode64(File.read(filepath))
-      mime_type_object = MIME::Types.of(filename).first
+      mime_type_object = MIME::Types.of(filename).last
       mime_type = mime_type_object ? mime_type_object.content_type : nil
 
       @result[name] = {
