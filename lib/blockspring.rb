@@ -5,7 +5,7 @@ require 'mime/types'
 require "tempfile"
 
 module Blockspring
-  def self.parse(input_params, json_parsed = false)
+  def self.parse(input_params, json_parsed = true)
     @request = Request.new
 
     if json_parsed == true
