@@ -128,12 +128,11 @@ module Blockspring
         return parsed_results
       else
         parsed_results["_headers"] = response.headers
+        return self.parse(parsed_results, true)
       end
     rescue
       return results
     end
-
-    return self.parse(parsed_results, true)
   end
 
   def self.define(block)
