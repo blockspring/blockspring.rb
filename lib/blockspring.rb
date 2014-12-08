@@ -5,6 +5,78 @@ require 'mime/types'
 require "tempfile"
 
 module Blockspring
+  def self.parse(input_params, json_parsed = false)
+    @request = Request.new
+
+    if json_parsed == true
+      params = input_params
+    else
+      begin
+        params = JSON.parse(input_params)
+      rescue
+        raise "You didn't pass valid json inputs."
+      end
+    end
+
+    if !(params.is_a?(Hash))
+      raise "Can't parse keys/values from your json inputs."
+    end
+
+    if !(params.has_key?("_blockspring_spec") && params["_blockspring_spec"])
+      @request.instance_variable_set("@params", params)
+    else
+      for var_name in params.keys
+        if (var_name == "_blockspring_spec")
+          # pass
+        elsif ((var_name == "_errors") && params[var_name].is_a?(Array))
+          for error in params[var_name]
+            if (error.is_a?(Hash)) && (error.has_key?("title"))
+              @request.addError(error)
+            end
+          end
+        elsif ((var_name == "_headers") && params[var_name].is_a?(Hash))
+          headers = params[var_name]
+          if(headers.is_a?(Hash))
+            @request.addHeaders(stringify_keys(headers))
+          else
+            @request.addHeaders(headers)
+          end
+        elsif (
+          params[var_name].is_a?(Hash) and
+          params[var_name].has_key?("filename") and
+          params[var_name]["filename"] and
+          # either data or url must exist and not be empty
+          (
+            (params[var_name].has_key?("data") and params[var_name]["data"]) or
+            (params[var_name].has_key?("url") and params[var_name]["url"]))
+          )
+            suffix = "-%s" % params[var_name]["filename"]
+            tmp_file = Tempfile.new(["",suffix])
+            if (params[var_name].has_key?("data"))
+              begin
+                tmp_file.write(Base64.decode64(params[var_name]["data"]))
+                @request.params[var_name] = tmp_file.path
+              rescue
+                @request.params[var_name] = params[var_name]
+              end
+            else
+              begin
+                tmp_file.write(RestClient.get(params[var_name]["url"]))
+                @request.params[var_name] = tmp_file.path
+              rescue
+                @request.params[var_name] = params[var_name]
+              end
+            end
+            tmp_file.close
+        else
+          @request.params[var_name] = params[var_name]
+        end
+      end
+    end
+
+    return @request
+  end
+
   def self.run(block, data = {}, api_key = nil )
     if !(data.is_a?(Hash))
       raise "your data needs to be a dictionary."
@@ -21,75 +93,57 @@ module Blockspring
       response = e.response
     end
 
+    results = response.body
+
     begin
-      body = JSON.parse(response.body)
+      return JSON.parse(results)
     rescue
-      body = response.body
+      return results
+    end
+  end
+
+  def self.runParsed(block, data = {}, api_key = nil )
+    if !(data.is_a?(Hash))
+      raise "your data needs to be a dictionary."
     end
 
-    return body
+    data = data.to_json
+    api_key = api_key || ENV['BLOCKSPRING_API_KEY'] || ""
+    blockspring_url = ENV['BLOCKSPRING_URL'] || 'https://sender.blockspring.com'
+    block = block.split("/")[-1]
+
+    begin
+      response = RestClient.post "https://sender.blockspring.com/api_v2/blocks/#{block}?api_key=#{api_key}", data, :content_type => :json
+    rescue => e
+      response = e.response
+    end
+
+    results = response.body
+
+
+    begin
+      parsed_results = JSON.parse(results)
+
+      if (!parsed_results.is_a?(Hash))
+        return parsed_results
+      else
+        parsed_results["_headers"] = response.headers
+      end
+    rescue
+      return results
+    end
+
+    return self.parse(parsed_results, true)
   end
 
   def self.define(block)
-    @request = Request.new
     @response = Response.new
 
     #stdin parsing
     if(!STDIN.tty?)
-      begin
-        params = JSON.parse($stdin.read)
-      rescue
-        raise "You didn't pass valid json inputs."
-      end
-
-      if !(params.is_a?(Hash))
-        raise "Can't parse keys/values from your json inputs."
-      end
-
-      if !(params.has_key?("_blockspring_spec") && params["_blockspring_spec"])
-        @request.instance_variable_set("@params", params)
-      else
-        for var_name in params.keys
-          if (var_name == "_blockspring_spec")
-            # pass
-          elsif ((var_name == "_errors") && params[var_name].is_a?(Array))
-            for error in params[var_name]
-              if (error.is_a?(Hash)) && (error.has_key?("title"))
-                @request.addError(error)
-              end
-            end
-          elsif (
-            params[var_name].is_a?(Hash) and
-            params[var_name].has_key?("filename") and
-            params[var_name]["filename"] and
-            # either data or url must exist and not be empty
-            (
-              (params[var_name].has_key?("data") and params[var_name]["data"]) or
-              (params[var_name].has_key?("url") and params[var_name]["url"]))
-            )
-              suffix = "-%s" % params[var_name]["filename"]
-              tmp_file = Tempfile.new(["",suffix])
-              if (params[var_name].has_key?("data"))
-                begin
-                  tmp_file.write(Base64.decode64(params[var_name]["data"]))
-                  @request.params[var_name] = tmp_file.path
-                rescue
-                  @request.params[var_name] = params[var_name]
-                end
-              else
-                begin
-                  tmp_file.write(RestClient.get(params[var_name]["url"]))
-                  @request.params[var_name] = tmp_file.path
-                rescue
-                  @request.params[var_name] = params[var_name]
-                end
-              end
-              tmp_file.close
-          else
-            @request.params[var_name] = params[var_name]
-          end
-        end
-      end
+      @request = self.parse($stdin.read, false)
+    else
+      @request = Request.new
     end
 
     #args parsing
@@ -121,6 +175,7 @@ module Blockspring
     def initialize
       @params = {}
       @_errors = []
+      @_headers = {}
     end
 
     attr_reader :params
@@ -132,6 +187,14 @@ module Blockspring
 
     def addError(error)
       @_errors.push(error)
+    end
+
+    def addHeaders(headers)
+      @_headers = headers
+    end
+
+    def getHeaders
+      return @_headers
     end
   end
 
@@ -176,4 +239,25 @@ module Blockspring
       puts @result.to_json
     end
   end
+
+  def self.transform_hash(original, options={}, &block)
+    original.inject({}){|result, (key,value)|
+      value = if (options[:deep] && Hash === value)
+                transform_hash(value, options, &block)
+              else
+                value
+              end
+      block.call(result,key,value)
+      result
+    }
+  end
+
+  def self.stringify_keys(hash)
+    transform_hash(hash) {|hash, key, value|
+      hash[key.to_s] = value
+    }
+  end
+
+  private_class_method :transform_hash
+  private_class_method :stringify_keys
 end
