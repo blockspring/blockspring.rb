@@ -88,7 +88,7 @@ module Blockspring
     block = block.split("/")[-1]
 
     begin
-      response = RestClient.post "https://sender.blockspring.com/api_v2/blocks/#{block}?api_key=#{api_key}", data, :content_type => :json
+      response = RestClient.post "#{blockspring_url}/api_v2/blocks/#{block}?api_key=#{api_key}", data, :content_type => :json
     rescue => e
       response = e.response
     end
@@ -113,7 +113,7 @@ module Blockspring
     block = block.split("/")[-1]
 
     begin
-      response = RestClient.post "https://sender.blockspring.com/api_v2/blocks/#{block}?api_key=#{api_key}", data, :content_type => :json
+      response = RestClient.post "#{blockspring_url}/api_v2/blocks/#{block}?api_key=#{api_key}", data, :content_type => :json
     rescue => e
       response = e.response
     end
