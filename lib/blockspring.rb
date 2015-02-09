@@ -77,18 +77,33 @@ module Blockspring
     return @request
   end
 
-  def self.run(block, data = {}, api_key = nil )
+  def self.run(block, data = {}, options = {})
+    if (options.is_a?(String))
+      options = {
+        "api_key" => options,
+        "cache" => false,
+        "expiry" => 0
+      }
+    end
+
+    unless (options.has_key?("api_key"))
+      options["api_key"] = nil
+    end
+
     if !(data.is_a?(Hash))
       raise "your data needs to be a dictionary."
     end
 
     data = data.to_json
-    api_key = api_key || ENV['BLOCKSPRING_API_KEY'] || ""
+    api_key = options["api_key"] || ENV['BLOCKSPRING_API_KEY'] || ""
+    cache = options.has_key?("cache") ? options["cache"] : false
+    expiry = options.has_key?("expiry") ? options["expiry"] : nil
+
     blockspring_url = ENV['BLOCKSPRING_URL'] || 'https://sender.blockspring.com'
     block = block.split("/")[-1]
 
     begin
-      response = RestClient.post "#{blockspring_url}/api_v2/blocks/#{block}?api_key=#{api_key}", data, :content_type => :json
+      response = RestClient.post "#{blockspring_url}/api_v2/blocks/#{block}?api_key=#{api_key}&cache=#{cache}&expiry=#{expiry}", data, :content_type => :json
     rescue => e
       response = e.response
     end
@@ -102,18 +117,31 @@ module Blockspring
     end
   end
 
-  def self.runParsed(block, data = {}, api_key = nil )
+  def self.runParsed(block, data = {}, options = {})
+    if (options.is_a?(String))
+      options = {
+        "api_key" => options
+      }
+    end
+
+    unless (options.has_key?("api_key"))
+      options["api_key"] = nil
+    end
+
     if !(data.is_a?(Hash))
       raise "your data needs to be a dictionary."
     end
 
     data = data.to_json
-    api_key = api_key || ENV['BLOCKSPRING_API_KEY'] || ""
+    api_key = options["api_key"] || ENV['BLOCKSPRING_API_KEY'] || ""
+    cache = options.has_key?("cache") ? options["cache"] : false
+    expiry = options.has_key?("expiry") ? options["expiry"] : nil
+
     blockspring_url = ENV['BLOCKSPRING_URL'] || 'https://sender.blockspring.com'
     block = block.split("/")[-1]
 
     begin
-      response = RestClient.post "#{blockspring_url}/api_v2/blocks/#{block}?api_key=#{api_key}", data, :content_type => :json
+      response = RestClient.post "#{blockspring_url}/api_v2/blocks/#{block}?api_key=#{api_key}&cache=#{cache}&expiry=#{expiry}", data, :content_type => :json
     rescue => e
       response = e.response
     end
