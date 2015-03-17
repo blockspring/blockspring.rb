@@ -5,6 +5,7 @@ require 'mime/types'
 require "tempfile"
 
 module Blockspring
+  @handles = []
   def self.parse(input_params, json_parsed = true)
     request = Request.new
 
@@ -67,6 +68,7 @@ module Blockspring
                 request.params[var_name] = params[var_name]
               end
             end
+            @handles << tmp_file
             tmp_file.close
         else
           request.params[var_name] = params[var_name]
